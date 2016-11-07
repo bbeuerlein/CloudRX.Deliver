@@ -1,14 +1,15 @@
 <?xml version='1.0' encoding='utf-8'?>
-<widget id="wr.arecloudship.cloudrx" version="1.0.0" xmlns="http://www.w3.org/ns/widgets" xmlns:cdv="http://cordova.apache.org/ns/1.0">
+<widget id="wr.arecloudship.cloudrx" version="1.2.0" xmlns="http://www.w3.org/ns/widgets" xmlns:cdv="http://cordova.apache.org/ns/1.0">
     <name>CloudRx Delivery</name>
     <description>
-        A sample Apache Cordova application that responds to the deviceready event.
+        Delivery application developed specifically for the Applied Resources Cloud RX system.
     </description>
     <author email="dev@cordova.apache.org" href="http://cordova.io">
-        Apache Cordova Team
+        Applied Resources
     </author>
     <content src="index.html" />
     <plugin name="cordova-plugin-whitelist" spec="1" />
+    <plugin name="phonegap-plugin-barcodescanner" spec="1" />
     <access origin="*" />
     <allow-intent href="http://*/*" />
     <allow-intent href="https://*/*" />
@@ -23,4 +24,5 @@
         <allow-intent href="itms:*" />
         <allow-intent href="itms-apps:*" />
     </platform>
+    <icon src="icon.png" />
 </widget>
