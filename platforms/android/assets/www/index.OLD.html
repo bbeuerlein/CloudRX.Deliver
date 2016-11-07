@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<!--
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    "License"); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+     KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.
+-->
+<html>
+    <head>
+        <!--
+        Customize this policy to fit your own app's needs. For more guidance, see:
+            https://github.com/apache/cordova-plugin-whitelist/blob/master/README.md#content-security-policy
+        Some notes:
+            * gap: is required only on iOS (when using UIWebView) and is needed for JS->native communication
+            * https://ssl.gstatic.com is required only on Android and is needed for TalkBack to function properly
+            * Disables use of inline scripts in order to mitigate risk of XSS vulnerabilities. To change this:
+                * Enable inline JS: add 'unsafe-inline' to default-src
+        -->
+        <meta http-equiv="Content-Security-Policy" content="default-src 'self' data: gap: https://ssl.gstatic.com 'unsafe-eval'; style-src 'self' 'unsafe-inline'; media-src *; img-src 'self' data: content:;">
+        <meta name="format-detection" content="telephone=no">
+        <meta name="msapplication-tap-highlight" content="no">
+        <meta name="viewport" content="user-scalable=no, initial-scale=1, maximum-scale=1, minimum-scale=1, width=device-width">
+        <title>CloudRX Deliver</title>
+
+		<link rel="stylesheet" type="text/css" href="css/index.css">
+		<link rel="stylesheet" type="text/css" href="css/bootstrap/css/bootstrap.min.css">
+		<link rel="stylesheet" type="text/css" href="css/bootstrap/css/bootstrap-responsive.min.css">
+
+		<script type="text/javascript" src="Scripts/jquery-1.6.4-vsdoc.js"></script>
+		<script type="text/javascript" src="Scripts/jquery.validate.min.js"></script>
+		<!-- <script type="text/jscript" src="Scripts/jquery.unobtrusive-ajax.min.js"></script> -->
+		<script type="text/javascript" src="Scripts/jquery.validate.unobtrusive.min.js"></script>
+		
+		<script type="text/jscript" src="Scripts/Bootstrap/bootstrap.min.js"></script>
+		<script type="text/javascript" src="Scripts/Knockout/knockout-2.3.0.js"></script>
+		<!-- <script type="text/jscript" src="Scripts/Knockout/knockout.mapping.js"></script> -->
+		
+		<script type="text/javascript" src="cordova.js"></script>
+		<script type="text/javascript" src="barcodescanner.js"></script>
+        
+
+	
+	
+		<script type="text/jscript">
+		var defaultPackage = {
+			"Recipient": "",
+			"Department": "",
+			"Building": ""
+		};
+		
+		function appViewModel() {
+			var self = this;
+
+			self.selectedPackage = ko.observable();
+			self.selectedPackages = ko.observableArray();
+			self.errorMsg = ko.observable("");
+			self.statusMsg = ko.observable("");
+			self.signature = ko.observable("");
+			self.manualEntry = ko.observable("");
+
+			self.onDeviceReady = function() {
+				self.receivedEvent('deviceready');
+			};
+			self.receivedEvent = function(id) {
+				var parentElement = document.getElementById(id);
+				var listeningElement = parentElement.querySelector('.listening');
+				var receivedElement = parentElement.querySelector('.received');
+
+				listeningElement.setAttribute('style', 'display:none;');
+				receivedElement.setAttribute('style', 'display:block;');
+
+				console.log('Received Event: ' + id);
+			};	
+			document.addEventListener('deviceready', self.onDeviceReady, false);
+			
+			
+			// DELIVERIES---------------------------------
+			self.scanBarcode_deliver = function () {
+				console.log('scanning');
+				try {
+					var scanner = cordova.require("cordova/plugin/BarcodeScanner");
+
+					scanner.scan( function (result) { 
+						self.errorMsg("");
+						self.getDelivery(result.text);
+
+					}, function (error) { 
+						console.log("Scanning failed: ", error); 
+						self.errorMsg("Scanning failed: " + error);
+					} );
+				} catch (ex) {
+					self.statusMsg("");
+					console.log(ex.message);
+					self.errorMsg(ex.message);
+				}
+			};
+			
+			self.uploadDelivery = function () {
+				var d = {
+					"Receivables": ko.toJS(self.selectedPackages()),
+					"Signature": self.signature()
+				};
+				$('#dialogue_ConfirmDelivery').modal('hide');
+				self.statusMsg("Uploading " + d.Receivables.length + " package(s)");
+
+				$.ajax({
+					type: "POST",
+					contentType: "application/json",
+					dataType: "text json",
+					url: 'https://wr.arecloudship.com/RX/actionapi/MobileApp/Deliver',
+					data: ko.toJSON(d),
+					success: function (data) {
+						self.errorMsg("");
+						//alert("Upload Successful!");
+						//self.selectedPackage(null);
+						self.reset();
+						self.statusMsg("Upload Successful!");
+					},
+					error: function (jqHXR, textStatus, errorThrown) {
+						self.statusMsg("");
+						alert("Error transmitting packages... please try again.");
+						try {
+							var response = jQuery.parseJSON(jqHXR.responseText);
+							self.errorMsg(response.ExceptionMessage);
+						}
+						catch (e) {
+							self.errorMsg(jqHXR.responseText);
+						}
+						//self.errorMsg("Error transmitting packages... please try again.");
+					}
+				});
+			};
+			
+			self.reset = function () {
+				self.selectedPackage(null);
+				self.selectedPackages.removeAll();
+				self.signature("");
+				self.errorMsg("");
+				self.statusMsg("");
+				self.manualEntry("");
+			};
+			
+			//self.getPackages = function () {
+			//    var d = ko.mapping.toJSON(self.scannedPackages());
+			//
+			//    $.ajax({
+			//        type: "POST",
+			//        contentType: "application/json",
+			//        dataType: "text json",
+			//        url: 'https://wr.arecloudship.com/RX/api/MobileApp/GetDeliveries',
+			//        data: ko.mapping.toJSON(d),
+			//        success: function (data) {
+			//			self.errorMsg("");
+			//            //alert("Upload Successful!");
+			//			self.deliveryPackages(data);
+			//        },
+			//        error: function (jqHXR, textStatus, errorThrown) {
+			//            alert("Error getting package... please try again.");
+			//        }
+			//    });
+			//};
+			
+			self.getDelivery = function(id) {
+				self.statusMsg("Getting delivery with barcode: " + id);
+				//alert('https://wr.arecloudship.com/RX/actionapi/MobileApp/GetPackage/' + id);
+				 $.ajax({
+					type: "GET",
+					contentType: "application/json",
+					dataType: "text json",
+					url: 'https://wr.arecloudship.com/RX/actionapi/MobileApp/GetPackage/' + id,
+					success: function (data) {
+						self.errorMsg("");
+						//alert("Upload Successful!");
+						self.selectedPackage(data);
+						self.selectedPackages.push(data);
+						self.statusMsg("Package with tracking number: " + id + " retreived. Total packages: " + self.selectedPackages().length);
+					},
+					error: function (jqHXR, textStatus, errorThrown) {
+						self.statusMsg("");
+						try {
+							var response = jQuery.parseJSON(jqHXR.responseText);
+							self.errorMsg(response.ExceptionMessage);
+						}
+						catch (e) {
+							self.errorMsg(jqHXR.responseText);
+						}
+						//self.errorMsg(jqHXR.responseText);
+						alert("Error getting delivery... please try again.");
+					}
+				});
+			};
+			
+			self.requestSignature = function () {
+				$('#dialogue_ConfirmDelivery').modal('show');
+			};
+			self.hideSignature = function () {
+				$('#dialogue_ConfirmDelivery').modal('hide');
+			};
+			
+			self.promptManual = function () {
+				$('#dialogue_ManualEntry').modal('show');
+			};
+			self.hideManual = function () {
+				$('#dialogue_ManualEntry').modal('hide');
+			};
+			self.processManual = function () {
+				$('#dialogue_ManualEntry').modal('hide');
+				self.getDelivery(self.manualEntry());
+			};
+			
+			//self.refresh = function() {
+			//	self.getPackages();
+			//};
+			
+		};
+		
+		$(document).ready(function() {
+			ko.applyBindings(new appViewModel());
+		});
+		
+		</script>
+
+    </head>
+    <body>
+        
+    <div id="deliver">
+		<h2>Deliver</h2>
+		
+		<div id="deviceready" class="blink">
+			<p class="event listening">Connecting to Device</p>
+			<p class="event received">Device is Ready</p>
+		</div>
+		
+		<label>When you are ready to deliver a package, scan the package's barcode to bring it up for delivery.</label>
+		<button id="btnScan" data-bind="click: $root.reset" class="btn-warning btn-large">Reset</button>
+		<p></p>
+		<label style="color: Red" id="lblScanError" data-bind="text: $root.errorMsg"></label>
+		<label id="lblScanError" data-bind="text: $root.statusMsg"></label>
+		<p></p>
+		<button id="btnScan" data-bind="click: $root.scanBarcode_deliver" class="btn-primary btn-large">Scan</button> or <button id="btnManual" data-bind="click: $root.promptManual" class="btn-primary btn-large">Manual</button>
+		
+		<div data-bind="with: $root.selectedPackage, visible: $root.selectedPackage">
+			<label><b>Recipient</b></label>
+			<label data-bind="text: Recipient"></label>
+			<label><b>Department</b></label>
+			<label data-bind="text: Department"></label>
+			<label><b>Building</b></label>
+			<label data-bind="text: Building"></label>
+			
+			
+			<button data-bind="click: $root.requestSignature" class="btn-success btn-large">Deliver</button>
+		</div>
+		
+		
+	</div>
+		
+	<div id="dialogue_ConfirmDelivery" class="modal hide">
+		<div class="modal-header">
+			<button type="button" class="close" data-dismiss="modal">x</button>
+			<h3>Confirm Receipt</h3>
+		</div>
+		<div class="modal-body">
+			<div class="editor-label">
+				<label>Please enter your intials below to mark the packages as delivered:</label>
+			</div>
+			<div class="editor-field">
+				<input data-bind="value: $root.signature" />
+			</div>
+			<button data-bind="click: $root.uploadDelivery" class="btn-success btn-large">Confirm</button>
+		</div>
+	</div>
+	<div id="dialogue_ManualEntry" class="modal hide">
+		<div class="modal-header">
+			<button type="button" class="close" data-dismiss="modal">x</button>
+			<h3>Manual Entry</h3>
+		</div>
+		<div class="modal-body">
+			<div class="editor-label">
+				<label>Please enter the tracking number as it appears on the label</label>
+			</div>
+			<div class="editor-field">
+				<input data-bind="value: $root.manualEntry" />
+			</div>
+			<button data-bind="click: $root.processManual" class="btn-success btn-large">Get Delivery</button>
+		</div>
+	</div>
+    </body>
+</html>

@@ -1,0 +1,1 @@
+This application deliver packages in your profile. It will only work with a valid license with the ARE Receiving applicaiton.

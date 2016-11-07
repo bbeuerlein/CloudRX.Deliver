@@ -1,0 +1,277 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <title>ARE RX Deliver</title>
+
+	<link rel="stylesheet" type="text/css" href="Content/index.css">
+	<link rel="stylesheet" type="text/css" href="Content/bootstrap/css/bootstrap.min.css">
+	<link rel="stylesheet" type="text/css" href="Content/bootstrap/css/bootstrap-responsive.min.css">
+
+    <script type="text/javascript" src="Scripts/jquery-1.6.4-vsdoc.js"></script>
+    <script type="text/javascript" src="Scripts/jquery.validate.min.js"></script>
+    <!-- <script type="text/jscript" src="Scripts/jquery.unobtrusive-ajax.min.js"></script> -->
+    <script type="text/javascript" src="Scripts/jquery.validate.unobtrusive.min.js"></script>
+    
+    <script type="text/jscript" src="Scripts/Bootstrap/bootstrap.min.js"></script>
+    <script type="text/javascript" src="Scripts/Knockout/knockout-2.3.0.js"></script>
+    <!-- <script type="text/jscript" src="Scripts/Knockout/knockout.mapping.js"></script> -->
+	
+	<script type="text/javascript" src="cordova.js"></script>
+    <script type="text/javascript" src="barcodescanner.js"></script>
+        
+
+	
+	
+    <script type="text/jscript">
+    var defaultPackage = {
+		"Recipient": "",
+		"Department": "",
+		"Building": ""
+	};
+	
+    function appViewModel() {
+        var self = this;
+
+		self.selectedPackage = ko.observable();
+		self.selectedPackages = ko.observableArray();
+		self.errorMsg = ko.observable("");
+		self.statusMsg = ko.observable("");
+		self.signature = ko.observable("");
+		self.manualEntry = ko.observable("");
+
+		self.onDeviceReady = function() {
+			self.receivedEvent('deviceready');
+		};
+	    self.receivedEvent = function(id) {
+			var parentElement = document.getElementById(id);
+			var listeningElement = parentElement.querySelector('.listening');
+			var receivedElement = parentElement.querySelector('.received');
+
+			listeningElement.setAttribute('style', 'display:none;');
+			receivedElement.setAttribute('style', 'display:block;');
+
+			console.log('Received Event: ' + id);
+		};	
+		document.addEventListener('deviceready', self.onDeviceReady, false);
+		
+		
+        // DELIVERIES---------------------------------
+		self.scanBarcode_deliver = function () {
+			console.log('scanning');
+			try {
+				var scanner = cordova.require("cordova/plugin/BarcodeScanner");
+
+				scanner.scan( function (result) { 
+					self.errorMsg("");
+					self.getDelivery(result.text);
+
+				}, function (error) { 
+					console.log("Scanning failed: ", error); 
+					self.errorMsg("Scanning failed: " + error);
+				} );
+			} catch (ex) {
+				self.statusMsg("");
+				console.log(ex.message);
+				self.errorMsg(ex.message);
+			}
+		};
+		
+        self.uploadDelivery = function () {
+            var d = {
+				"Receivables": ko.toJS(self.selectedPackages()),
+				"Signature": self.signature()
+			};
+			$('#dialogue_ConfirmDelivery').modal('hide');
+			self.statusMsg("Uploading " + d.Receivables.length + " package(s)");
+
+            $.ajax({
+                type: "POST",
+                contentType: "application/json",
+                dataType: "text json",
+                url: 'https://wr.arecloudship.com/RX/actionapi/MobileApp/Deliver',
+                data: ko.toJSON(d),
+                success: function (data) {
+					self.errorMsg("");
+                    //alert("Upload Successful!");
+					//self.selectedPackage(null);
+					self.reset();
+                    self.statusMsg("Upload Successful!");
+                },
+                error: function (jqHXR, textStatus, errorThrown) {
+					self.statusMsg("");
+                    alert("Error transmitting packages... please try again.");
+					try {
+                        var response = jQuery.parseJSON(jqHXR.responseText);
+                        self.errorMsg(response.ExceptionMessage);
+                    }
+                    catch (e) {
+                        self.errorMsg(jqHXR.responseText);
+                    }
+					//self.errorMsg("Error transmitting packages... please try again.");
+                }
+            });
+        };
+		
+		self.reset = function () {
+			self.selectedPackage(null);
+			self.selectedPackages.removeAll();
+			self.signature("");
+			self.errorMsg("");
+			self.statusMsg("");
+			self.manualEntry("");
+		};
+		
+        //self.getPackages = function () {
+        //    var d = ko.mapping.toJSON(self.scannedPackages());
+		//
+        //    $.ajax({
+        //        type: "POST",
+        //        contentType: "application/json",
+        //        dataType: "text json",
+        //        url: 'https://wr.arecloudship.com/RX/api/MobileApp/GetDeliveries',
+        //        data: ko.mapping.toJSON(d),
+        //        success: function (data) {
+		//			self.errorMsg("");
+        //            //alert("Upload Successful!");
+		//			self.deliveryPackages(data);
+        //        },
+        //        error: function (jqHXR, textStatus, errorThrown) {
+        //            alert("Error getting package... please try again.");
+        //        }
+        //    });
+        //};
+		
+		self.getDelivery = function(id) {
+			self.statusMsg("Getting delivery with barcode: " + id);
+			//alert('https://wr.arecloudship.com/RX/actionapi/MobileApp/GetPackage/' + id);
+			 $.ajax({
+                type: "GET",
+                contentType: "application/json",
+                dataType: "text json",
+                url: 'https://wr.arecloudship.com/RX/actionapi/MobileApp/GetPackage/' + id,
+                success: function (data) {
+					self.errorMsg("");
+                    //alert("Upload Successful!");
+					self.selectedPackage(data);
+					self.selectedPackages.push(data);
+					self.statusMsg("Package with tracking number: " + id + " retreived. Total packages: " + self.selectedPackages().length);
+                },
+                error: function (jqHXR, textStatus, errorThrown) {
+					self.statusMsg("");
+					try {
+                        var response = jQuery.parseJSON(jqHXR.responseText);
+                        self.errorMsg(response.ExceptionMessage);
+                    }
+                    catch (e) {
+                        self.errorMsg(jqHXR.responseText);
+                    }
+					//self.errorMsg(jqHXR.responseText);
+                    alert("Error getting delivery... please try again.");
+                }
+            });
+		};
+		
+		self.requestSignature = function () {
+			$('#dialogue_ConfirmDelivery').modal('show');
+		};
+		self.hideSignature = function () {
+			$('#dialogue_ConfirmDelivery').modal('hide');
+		};
+		
+		self.promptManual = function () {
+			$('#dialogue_ManualEntry').modal('show');
+		};
+		self.hideManual = function () {
+			$('#dialogue_ManualEntry').modal('hide');
+		};
+		self.processManual = function () {
+			$('#dialogue_ManualEntry').modal('hide');
+			self.getDelivery(self.manualEntry());
+		};
+		
+		//self.refresh = function() {
+		//	self.getPackages();
+		//};
+		
+    };
+	
+	$(document).ready(function() {
+		ko.applyBindings(new appViewModel());
+	});
+    
+    </script>
+
+</head>
+<body>
+	<!-- <ul class="nav nav-tabs" id="myTab">
+	  <li class="active"><a href="#login">Login</a></li>
+	  <li><a href="#main">Main</a></li>
+	  <li><a href="#receive">Receive</a></li>
+	  <li><a href="#deliver">Deliver</a></li>
+	</ul> -->
+	
+	
+    <div id="deliver">
+		<h2>Deliver</h2>
+		
+		<div id="deviceready" class="blink">
+			<p class="event listening">Connecting to Device</p>
+			<p class="event received">Device is Ready</p>
+		</div>
+		
+		<label>When you are ready to deliver a package, scan the package's barcode to bring it up for delivery.</label>
+		<button id="btnScan" data-bind="click: $root.reset" class="btn-warning btn-large">Reset</button>
+		<p></p>
+		<label style="color: Red" id="lblScanError" data-bind="text: $root.errorMsg"></label>
+		<label id="lblScanError" data-bind="text: $root.statusMsg"></label>
+		<p></p>
+		<button id="btnScan" data-bind="click: $root.scanBarcode_deliver" class="btn-primary btn-large">Scan</button> or <button id="btnManual" data-bind="click: $root.promptManual" class="btn-primary btn-large">Manual</button>
+		
+		<div data-bind="with: $root.selectedPackage, visible: $root.selectedPackage">
+			<label><b>Recipient</b></label>
+			<label data-bind="text: Recipient"></label>
+			<label><b>Department</b></label>
+			<label data-bind="text: Department"></label>
+			<label><b>Building</b></label>
+			<label data-bind="text: Building"></label>
+			
+			
+			<button data-bind="click: $root.requestSignature" class="btn-success btn-large">Deliver</button>
+		</div>
+		
+		
+	</div>
+		
+	<div id="dialogue_ConfirmDelivery" class="modal hide">
+		<div class="modal-header">
+			<button type="button" class="close" data-dismiss="modal">x</button>
+			<h3>Confirm Receipt</h3>
+		</div>
+		<div class="modal-body">
+			<div class="editor-label">
+				<label>Please enter your intials below to mark the packages as delivered:</label>
+			</div>
+			<div class="editor-field">
+				<input data-bind="value: $root.signature" />
+			</div>
+			<button data-bind="click: $root.uploadDelivery" class="btn-success btn-large">Confirm</button>
+		</div>
+	</div>
+	<div id="dialogue_ManualEntry" class="modal hide">
+		<div class="modal-header">
+			<button type="button" class="close" data-dismiss="modal">x</button>
+			<h3>Manual Entry</h3>
+		</div>
+		<div class="modal-body">
+			<div class="editor-label">
+				<label>Please enter the tracking number as it appears on the label</label>
+			</div>
+			<div class="editor-field">
+				<input data-bind="value: $root.manualEntry" />
+			</div>
+			<button data-bind="click: $root.processManual" class="btn-success btn-large">Get Delivery</button>
+		</div>
+	</div>
+
+</body>
+</html>
